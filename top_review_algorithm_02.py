@@ -77,7 +77,7 @@ output = data.select(F.col('product_parent'), F.col('product_category'), F.col('
                      F.col('avg_rating'), F.col('n_ratings'))
 
 
-# Write the results to disk
+# Write the results to disk. Compared to Algorithm 1, note the use of coalesce rather than repartition.
 output.coalesce(1).write \
                   .option('header', 'true') \
                   .csv(output_path_top_products)

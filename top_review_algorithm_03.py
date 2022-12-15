@@ -95,7 +95,7 @@ for file in os.listdir(directory):
         top_ratings = top_ratings.unionByName(output)
 
 
-# Write the results to disk
+# Write the results to disk. Compared to Algorithm 1, note the use of coalesce rather than repartition.
 top_ratings.coalesce(1).write \
                        .option('header', 'true') \
                        .csv(output_path_top_products)
