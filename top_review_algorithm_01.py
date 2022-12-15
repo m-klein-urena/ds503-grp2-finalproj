@@ -2,22 +2,25 @@ from pyspark.sql import SparkSession
 from pyspark.sql.types import StructField, StructType, StringType, IntegerType, DateType
 import pyspark.sql.functions as F
 from pyspark.sql.window import Window
-
 import warnings
 warnings.filterwarnings('ignore')
 
+# Create Spark session
 spark = SparkSession \
     .builder \
     .appName("top_reviews_by_category") \
     .getOrCreate()
 
+# Specify input and output paths
 path_data = 'hdfs://localhost:9000/user/ds503/finalproject/data/'
+output_path_top_products = 'hdfs://localhost:9000/user/ds503/finalproject/output/top_products_by_cat.csv'
 
+# Define schema
 schema = StructType([
                     StructField('marketplace', StringType(), True,  metadata={'marketplace': '2 letter country code of the marketplace where the review was written'}),
                     StructField('customer_id', StringType(), True, metadata={'customer_id': 'Random identifier that can be used to aggregate reviews written by a single author'}),
                     StructField('review_id', StringType(), True, metadata={'review_id': 'The unique ID of the review'}),
-                    StructField('product_id', StringType(), True, metadata={'product_id': 'The unique ID of the review'}),
+                    StructField('product_id', StringType(), True, metadata={'product_id': 'The unique Product ID the review pertains to'}),
                     StructField('product_parent', StringType(), True, metadata={'parent_id': 'Random identifier that can be used to aggregate reviews for the same product'}),
                     StructField('product_title', StringType(), True, metadata={'product_title': 'Title of the product'}),
                     StructField('product_category', StringType(), True, metadata={'product_category': 'Broad product category that can be used to group reviews (also used to group the dataset into coherent parts)'}),
@@ -31,6 +34,8 @@ schema = StructType([
                     StructField('review_date', DateType(), True, metadata={'review_date': 'The date the review was written'})
                     ])
 
+
+# Load data to Spark data frame
 data = spark.read.option('header', 'true') \
                 .option('delimiter', '\t') \
                 .schema(schema) \
@@ -45,19 +50,13 @@ data = spark.read.option('header', 'true') \
                         F.col('review_date')) \
                 .dropna()
 
-def get_c_bayes(data):
-    c_bayes = data.groupBy('product_parent') \
-                  .count() \
-                  .sort(F.desc('count')) \
-                  .agg(F.percentile_approx('count', 0.75)).alias('75%') \
-                  .collect()
-    return c_bayes[0][0]
-
+# Define function to get the average of all product reviews
 def get_avg(data, col):
     avg = data.agg(F.avg(col)).collect()
     return avg[0][0]
 
 
+# Define function to aggregate data, find Bayes average, and then the top products by category
 def bayes_rank(data, c_bayes):
     avg_all = get_avg(data, 'star_rating')
 
@@ -79,13 +78,10 @@ def bayes_rank(data, c_bayes):
     return output
 
 
+# Run the function
 top_products = bayes_rank(data, c_bayes=200)
 
-
-output_path_top_products = 'hdfs://localhost:9000/user/output/top_products_by_cat_optimized.csv'
-# output_path_top_products = 'user/output/top_products_by_cat_optimized.csv'
+# Write the results to disk
 top_products.repartition(1).write \
                         .option('header', 'true') \
                         .csv(output_path_top_products)
-
-
